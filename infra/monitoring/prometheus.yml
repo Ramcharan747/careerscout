@@ -1,0 +1,51 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 60s
+  external_labels:
+    project: careerscout
+    environment: prod
+
+rule_files:
+  - "alerts.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+
+  - job_name: careerscout-ingestion
+    static_configs:
+      - targets: ["ingestion:9090"]
+    metrics_path: /metrics
+
+  - job_name: careerscout-tier1
+    static_configs:
+      - targets: ["tier1:9090"]
+
+  - job_name: careerscout-tier2
+    static_configs:
+      - targets: ["tier2:9090"]
+
+  - job_name: careerscout-tier3
+    static_configs:
+      - targets: ["tier3:9090"]
+
+  - job_name: careerscout-replay
+    static_configs:
+      - targets: ["replay:9090"]
+
+  - job_name: careerscout-normalise
+    static_configs:
+      - targets: ["normalise:9090"]
+
+  - job_name: redpanda
+    static_configs:
+      - targets: ["redpanda:9644"]
+    metrics_path: /metrics/consumer_offsets
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]

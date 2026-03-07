@@ -1,0 +1,86 @@
+# Prometheus Alert Rules — CareerScout
+# Alert on the three critical operational metrics from Section 8.
+
+groups:
+  - name: careerscout.critical
+    interval: 60s
+    rules:
+
+      # ── Tier 2 success rate must stay above 80% ──────────────────────────────
+      - alert: Tier2SuccessRatelow
+        expr: |
+          (
+            sum(rate(careerscout_tier2_success_total[5m]))
+            /
+            (sum(rate(careerscout_tier2_success_total[5m])) + sum(rate(careerscout_tier2_failure_total[5m])))
+          ) < 0.80
+        for: 5m
+        labels:
+          severity: critical
+          team: tier2
+        annotations:
+          summary: "Tier 2 success rate below 80%"
+          description: "Tier 2 success rate is {{ $value | humanizePercentage }}. Check Chromium pool health and bot detection rate."
+
+      # ── Replay queue lag must not exceed 1 hour ──────────────────────────────
+      - alert: ReplayQueueLagHigh
+        expr: |
+          careerscout_replay_queue_lag_seconds > 3600
+        for: 5m
+        labels:
+          severity: warning
+          team: replay
+        annotations:
+          summary: "Replay queue lag exceeds 1 hour"
+          description: "Replay lag is {{ $value | humanizeDuration }}. Scale up the replay engine or investigate errors."
+
+      # ── eBPF node failure ─────────────────────────────────────────────────────
+      - alert: Tier3NodeDown
+        expr: |
+          up{job="careerscout-tier3"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          team: tier3
+        annotations:
+          summary: "Tier 3 eBPF node is down"
+          description: "No Tier 3 eBPF nodes are reporting. Bot-protected URLs will not be processed."
+
+      # ── High replay error rate ────────────────────────────────────────────────
+      - alert: HighReplayErrorRate
+        expr: |
+          rate(careerscout_replay_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: replay
+        annotations:
+          summary: "High replay error rate"
+          description: "{{ $value }} replay errors/s. Check auth token expiry and API schema changes."
+
+      # ── URL processing stalled ────────────────────────────────────────────────
+      - alert: URLProcessingStalled
+        expr: |
+          rate(careerscout_urls_processed_total[15m]) == 0
+        for: 10m
+        labels:
+          severity: critical
+          team: ingestion
+        annotations:
+          summary: "URL processing has stalled"
+          description: "No URLs have been processed in the last 15 minutes. Check ingestion service and Redpanda connectivity."
+
+  - name: careerscout.cost
+    interval: 300s
+    rules:
+      # Alert if cost per URL rises above target ($0.001)
+      - alert: CostPerURLHigh
+        expr: |
+          careerscout_cost_per_url_dollars > 0.001
+        for: 30m
+        labels:
+          severity: info
+          team: infra
+        annotations:
+          summary: "Cost per URL above $0.001 target"
+          description: "Current cost per URL: ${{ $value }}. Review Tier 2/Tier 3 ratio."

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package classifier;
+
+option go_package = "github.com/careerscout/careerscout/internal/mlclient";
+
+// ClassifierService provides job API request classification.
+service ClassifierService {
+  // Classify determines whether a given network request is a job listing API.
+  rpc Classify (ClassifyRequest) returns (ClassifyResponse);
+}
+
+message ClassifyRequest {
+  string url         = 1;
+  string method      = 2;
+  map<string, string> headers = 3;
+  string body        = 4;
+}
+
+message ClassifyResponse {
+  bool   is_jobs_api = 1;
+  float  confidence  = 2;
+  string reason      = 3; // optional debug explanation
+}

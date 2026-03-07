@@ -1,0 +1,112 @@
+version: "3.9"
+
+services:
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: careerscout-redpanda
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --smp 1
+      - --memory 1G
+      - --overprovisioned
+      - --node-id 0
+      - --check=false
+    ports:
+      - "19092:19092"
+      - "18082:18082"
+      - "18081:18081"
+      - "19644:9644"
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+  redpanda-console:
+    image: redpandadata/console:latest
+    container_name: careerscout-console
+    entrypoint: /bin/sh
+    command: -c "echo \"$$CONSOLE_CONFIG_FILE\" > /tmp/config.yml; App"
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda:9092"]
+          schemaRegistry:
+            enabled: true
+            urls: ["http://redpanda:8081"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda:9644"]
+    ports:
+      - "8080:8080"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: careerscout-postgres
+    environment:
+      POSTGRES_DB: careerscout
+      POSTGRES_USER: careerscout
+      POSTGRES_PASSWORD: careerscout_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U careerscout -d careerscout"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: careerscout-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  init-topics:
+    image: redpandadata/redpanda:latest
+    container_name: careerscout-init-topics
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: /bin/bash
+    command: |
+      -c "
+        rpk topic create urls.to_process --brokers redpanda:9092 --partitions 12 &&
+        rpk topic create urls.tier1_queue --brokers redpanda:9092 --partitions 12 &&
+        rpk topic create urls.tier2_queue --brokers redpanda:9092 --partitions 12 &&
+        rpk topic create urls.tier3_queue --brokers redpanda:9092 --partitions 4  &&
+        rpk topic create apis.discovered  --brokers redpanda:9092 --partitions 12 &&
+        rpk topic create apis.failed      --brokers redpanda:9092 --partitions 4  &&
+        rpk topic create jobs.raw         --brokers redpanda:9092 --partitions 12 &&
+        echo 'All topics created successfully'
+      "
+    restart: on-failure
+
+volumes:
+  redpanda_data:
+  postgres_data:
+  redis_data:
