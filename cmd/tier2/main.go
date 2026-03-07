@@ -88,8 +88,7 @@ func main() {
 			break
 		}
 
-		pollCtx, pollCancel := context.WithTimeout(ctx, 5*time.Second)
-		err := consumer.Poll(pollCtx, func(_, _ string, value []byte) error {
+		err := consumer.Poll(ctx, func(_, _ string, value []byte) error {
 			var msg urlMessage
 			if err := json.Unmarshal(value, &msg); err != nil {
 				return fmt.Errorf("unmarshal: %w", err)
@@ -113,7 +112,6 @@ func main() {
 			}()
 			return nil
 		})
-		pollCancel()
 
 		if err != nil && ctx.Err() == nil {
 			log.Warn("poll error", zap.Error(err))
