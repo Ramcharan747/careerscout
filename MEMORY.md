@@ -56,7 +56,7 @@
 |------|--------|--------|-------|
 | 1 | URL Ingestion & Routing | ✅ Done | router.go, ratelimiter.go, postgres.go, redpanda.go, cmd/main.go, test |
 | 2 | Tier 1 Static Discovery | ✅ Done | worker.go, analyzer.go (10 ATS patterns), emitter.go, cmd/main.go, test |
-| 3 | Tier 2 CDP Interception | ✅ Done | worker.go (800ms kill), interceptor.go, classifier.go (7 signals), blocker.go, cmd/main.go, test |
+| 3 | Tier 2 CDP Interception | ✅ v3.2 | worker.go (Surgical), interceptor.go (Body Capture), classifier.go (7 signals), blocker.go, cmd/main.go |
 | 4 | Tier 3 eBPF | ✅ Done | ssl_intercept.c (uprobes), internal/tier3/loader.go |
 | 5 | ML Classifier | ✅ Done | model.py (16-feature ONNX), server.py (gRPC), classifier.proto, train.py |
 | 6 | Replay Engine | ✅ Done | main.rs, scheduler.rs, replayer.rs, auth.rs, emitter.rs, Cargo.toml |
@@ -104,3 +104,22 @@ Classify as target if 3+ signals present:
 - [ ] Company URL list source (Common Crawl? Purchased list?)
 - [ ] ML training data — 50,000 labelled API requests (existing or to be collected?)
 - [ ] Residential proxy provider for Tier 3
+---
+107: 
+108: ## Bottlenecks & Hardware Constraints (Resolved & Pending)
+109: 
+110: ### 1. Resolved: CDP Protocol Saturation (Tier 2 v3.1)
+111: - **Issue**: M2 Mac hardware (8GB RAM) hit Mach port limits when initializing `fetch.Enable` per-request under burst load.
+112: - **Fix**: Implemented **Pre-Armed Hot Tabs**. CDP domain is now enabled during background warming, removing 10s of swap-induced latency from the critical path.
+113: 
+114: ### 2. Resolved: Renderer-Level Deadlocks (Tier 2 v3.2)
+115: - **Issue**: Worker timeouts (45s) left browser tabs in a 'paused' state, causing renderer hangs that blocked the entire pool.
+116: - **Fix**: Decoupled `fetch.ContinueRequest` from the worker context. Cleanup now runs on `context.Background()` with a hard 2s guardrail.
+117: 
+118: ### 3. Current: M2 Swap Latency
+119: - **Issue**: Heavy Chrome tabs induce disk swap on 8GB machines, causing 10s+ pauses in uTLS handshakes and CDP responses.
+120: - **Mitigation**: Staggered pool startup (500ms delay) and aggressive RAM-saving (images disabled, `StopLoading` on hit).
+121: 
+122: ### 4. Resolved: POST Body Capture Regression
+123: - **Issue**: Surgical engine originally missed `PostDataEntries`, disabling Signal 7 (GraphQL) classification.
+124: - **Fix**: Implemented robust reconstruction from `network.PostDataEntry` slices.

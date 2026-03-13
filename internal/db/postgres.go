@@ -55,13 +55,23 @@ type Client struct {
 }
 
 // New creates a new database client using the provided connection string.
+// MaxConns defaults to 20. For env-driven pool sizing, use NewWithPoolSize.
 func New(ctx context.Context, dsn string) (*Client, error) {
+	return NewWithPoolSize(ctx, dsn, 20)
+}
+
+// NewWithPoolSize creates a database client with the specified maximum
+// connection pool size. Used by cmd binaries that expose DB_POOL_SIZE.
+func NewWithPoolSize(ctx context.Context, dsn string, maxConns int) (*Client, error) {
+	if maxConns <= 0 {
+		maxConns = 20
+	}
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("db: parse config: %w", err)
 	}
 
-	cfg.MaxConns = 20
+	cfg.MaxConns = int32(maxConns)
 	cfg.MinConns = 2
 	cfg.MaxConnLifetime = 30 * time.Minute
 	cfg.MaxConnIdleTime = 5 * time.Minute
@@ -91,7 +101,8 @@ func (c *Client) GetDiscoveryRecord(ctx context.Context, domain string) (*Discov
 		SELECT
 			dr.id, dr.company_id, dr.domain, COALESCE(dr.api_url, ''),
 			COALESCE(dr.http_method, ''), COALESCE(dr.request_body, ''),
-			dr.tier_used, dr.status, COALESCE(dr.confidence, 0.0),
+			COALESCE(dr.tier_used::text, ''), COALESCE(dr.status::text, ''), 
+			COALESCE(dr.confidence, 0.0),
 			dr.discovered_at, dr.last_replayed, dr.next_replay,
 			COALESCE(dr.last_error, ''), dr.created_at, dr.updated_at
 		FROM discovery_records dr
@@ -152,44 +163,79 @@ func (c *Client) CreatePendingDiscovery(ctx context.Context, domain, companyID s
 	return nil
 }
 
-// MarkDiscovered updates a record with the captured API details.
-func (c *Client) MarkDiscovered(ctx context.Context, domain string, tier DiscoveryTier, apiURL, method, body string, confidence float64) error {
+// MarkDiscovered updates a record with the captured API details, or creates it if it doesn't exist.
+// If companyID is empty or invalid, the company is automatically created by domain.
+func (c *Client) MarkDiscovered(ctx context.Context, companyID, domain string, tier DiscoveryTier, apiURL, method, body string, confidence float64) error {
+	// If no valid companyID, create/fetch the company record automatically
+	if companyID == "" {
+		var err error
+		companyID, err = c.UpsertCompany(ctx, domain)
+		if err != nil {
+			return fmt.Errorf("db: auto-upsert company for %q: %w", domain, err)
+		}
+	}
+
 	const q = `
-		UPDATE discovery_records
-		SET
+		INSERT INTO discovery_records (company_id, domain, status, tier_used, api_url, http_method, request_body, confidence, discovered_at, next_replay, updated_at)
+		VALUES ($1, $2, 'discovered', $3, $4, $5, $6, $7, NOW(), NOW() + INTERVAL '1 hour', NOW())
+		ON CONFLICT (domain) DO UPDATE SET
 			status        = 'discovered',
-			tier_used     = $2,
-			api_url       = $3,
-			http_method   = $4,
-			request_body  = $5,
-			confidence    = $6,
-			discovered_at = NOW(),
-			next_replay   = NOW() + INTERVAL '1 hour',
+			tier_used     = EXCLUDED.tier_used,
+			api_url       = EXCLUDED.api_url,
+			http_method   = EXCLUDED.http_method,
+			request_body  = EXCLUDED.request_body,
+			confidence    = EXCLUDED.confidence,
+			discovered_at = EXCLUDED.discovered_at,
+			next_replay   = EXCLUDED.next_replay,
 			consecutive_failures = 0,
-			last_error    = NULL
-		WHERE domain = $1
+			last_error    = NULL,
+			updated_at    = NOW()
 	`
-	if _, err := c.pool.Exec(ctx, q, domain, tier, apiURL, method, body, confidence); err != nil {
-		return fmt.Errorf("db: mark discovered %q: %w", domain, err)
+	if _, err := c.pool.Exec(ctx, q, companyID, domain, tier, apiURL, method, body, confidence); err != nil {
+		// Try once more with auto-upserted company
+		autoID, upsertErr := c.UpsertCompany(ctx, domain)
+		if upsertErr != nil {
+			return fmt.Errorf("db: mark discovered %q: %w", domain, err)
+		}
+		if _, err2 := c.pool.Exec(ctx, q, autoID, domain, tier, apiURL, method, body, confidence); err2 != nil {
+			return fmt.Errorf("db: mark discovered %q (retry): %w", domain, err2)
+		}
 	}
 	return nil
 }
 
 // MarkFailed increments the failure count and records the error for a domain.
-func (c *Client) MarkFailed(ctx context.Context, domain, errMsg string) error {
+// If companyID is empty or invalid, company is auto-created by domain.
+func (c *Client) MarkFailed(ctx context.Context, companyID, domain, errMsg string) error {
+	if companyID == "" {
+		var err error
+		companyID, err = c.UpsertCompany(ctx, domain)
+		if err != nil {
+			return fmt.Errorf("db: auto-upsert company for %q: %w", domain, err)
+		}
+	}
+
 	const q = `
-		UPDATE discovery_records
-		SET
-			consecutive_failures = consecutive_failures + 1,
-			last_error = $2,
+		INSERT INTO discovery_records (company_id, domain, status, last_error, consecutive_failures, updated_at)
+		VALUES ($1, $2, 'pending', $3, 1, NOW())
+		ON CONFLICT (domain) DO UPDATE SET
+			consecutive_failures = discovery_records.consecutive_failures + 1,
+			last_error = EXCLUDED.last_error,
+			updated_at = NOW(),
 			status = CASE
-				WHEN consecutive_failures + 1 >= 3 THEN 'failed'::discovery_status
-				ELSE status
+				WHEN discovery_records.consecutive_failures + 1 >= 3 THEN 'failed'::discovery_status
+				ELSE discovery_records.status
 			END
-		WHERE domain = $1
 	`
-	if _, err := c.pool.Exec(ctx, q, domain, errMsg); err != nil {
-		return fmt.Errorf("db: mark failed %q: %w", domain, err)
+	if _, err := c.pool.Exec(ctx, q, companyID, domain, errMsg); err != nil {
+		// Retry with auto-upserted company UUID
+		autoID, upsertErr := c.UpsertCompany(ctx, domain)
+		if upsertErr != nil {
+			return fmt.Errorf("db: mark failed %q: %w", domain, err)
+		}
+		if _, err2 := c.pool.Exec(ctx, q, autoID, domain, errMsg); err2 != nil {
+			return fmt.Errorf("db: mark failed %q (retry): %w", domain, err2)
+		}
 	}
 	return nil
 }

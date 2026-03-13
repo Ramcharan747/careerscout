@@ -58,7 +58,7 @@ func (e *Emitter) Emit(ctx context.Context, result Result) error {
 
 func (e *Emitter) emitSuccess(ctx context.Context, r Result) error {
 	// Update Postgres first — fail fast if DB is down
-	if err := e.db.MarkDiscovered(ctx, r.Domain, db.TierOne, r.APIURL, r.HTTPMethod, "", 0.95); err != nil {
+	if err := e.db.MarkDiscovered(ctx, r.CompanyID, r.Domain, db.TierOne, r.APIURL, r.HTTPMethod, "", 0.95); err != nil {
 		return fmt.Errorf("emitter: mark discovered in db: %w", err)
 	}
 
@@ -91,7 +91,7 @@ func (e *Emitter) emitSuccess(ctx context.Context, r Result) error {
 
 func (e *Emitter) emitFailure(ctx context.Context, r Result) error {
 	// Increment failure count in Postgres
-	if err := e.db.MarkFailed(ctx, r.Domain, r.Error); err != nil {
+	if err := e.db.MarkFailed(ctx, r.CompanyID, r.Domain, r.Error); err != nil {
 		return fmt.Errorf("emitter: mark failed in db: %w", err)
 	}
 

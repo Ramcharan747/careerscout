@@ -102,3 +102,136 @@ func TestAnalyzer_AnalyzeAll_ReturnsMultiple(t *testing.T) {
 		t.Fatalf("expected at least 2 matches, got %d", len(matches))
 	}
 }
+
+func TestAnalyzer_NextData(t *testing.T) {
+	a := tier1.NewAnalyzer()
+	// Use a generic /api/jobs URL embedded in __NEXT_DATA__ — one that does NOT
+	// match any of the named ATS patterns (greenhouse, lever, ashby etc.) so only
+	// the nextjs_data regex can match it.
+	html := `<script id="__NEXT_DATA__" type="application/json">
+	{"props":{"pageProps":{"apiBase":"https://careers.acme-corp.io/api/jobs?limit=20"}}}
+	</script>`
+	m := a.Analyze(html, "acme-corp.io")
+	if m == nil {
+		t.Fatal("expected nextjs_data match, got nil")
+	}
+	if m.Pattern != "nextjs_data" {
+		t.Fatalf("expected 'nextjs_data', got %q", m.Pattern)
+	}
+	if m.Method != "GET" {
+		t.Fatalf("expected GET, got %q", m.Method)
+	}
+}
+
+func TestAnalyzer_Preconnect(t *testing.T) {
+	a := tier1.NewAnalyzer()
+	// Simulate a page that declares a preconnect hint to a known ATS domain
+	html := `<html><head>
+	<link rel="preconnect" href="https://boards-api.greenhouse.io">
+	</head><body>Jobs</body></html>`
+	m := a.Analyze(html, "someco.com")
+	if m == nil {
+		t.Fatal("expected preconnect match, got nil")
+	}
+	if m.Pattern != "preconnect" {
+		t.Fatalf("expected 'preconnect', got %q", m.Pattern)
+	}
+	if m.APIURL == "" {
+		t.Fatal("APIURL should not be empty")
+	}
+}
+
+func TestAnalyzer_NextData_Nested(t *testing.T) {
+	a := tier1.NewAnalyzer()
+	// Use JSON escaping (\/) to defeat the flat regex patterns.
+	// The goquery + unmarshal approach will decode it and find the API!
+	html := `<html><body>
+	<script id="__NEXT_DATA__" type="application/json">
+	{
+		"props": {
+			"pageProps": {
+				"initialState": {
+					"jobBoard": {
+						"config": {
+							"endpoints": [
+								"https:\/\/ignore.me",
+								"https:\/\/api.lever.co\/v0\/postings\/nested-corp?mode=json"
+							]
+						}
+					}
+				}
+			}
+		}
+	}
+	</script>
+	</body></html>`
+
+	m := a.Analyze(html, "nested-corp.com")
+	if m == nil {
+		t.Fatal("expected a match from deeply nested Next.js data, got nil")
+	}
+	if m.Pattern != "nextjs_data" {
+		t.Fatalf("expected 'nextjs_data', got %q", m.Pattern)
+	}
+	if m.APIURL != "https://api.lever.co/v0/postings/nested-corp?mode=json" {
+		t.Fatalf("unexpected APIURL extracted: %q", m.APIURL)
+	}
+}
+
+func TestAnalyzer_CSPMeta(t *testing.T) {
+	a := tier1.NewAnalyzer()
+	html := `<head>
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.lever.co https://google-analytics.com;">
+	</head>`
+
+	m := a.Analyze(html, "csp-corp.com")
+	if m == nil {
+		t.Fatal("expected match from CSP meta tag, got nil")
+	}
+	if m.Pattern != "csp_meta" {
+		t.Fatalf("expected 'csp_meta', got %q", m.Pattern)
+	}
+	if m.APIURL != "https://api.lever.co" {
+		t.Fatalf("expected extracted URL to be https://api.lever.co, got %q", m.APIURL)
+	}
+}
+
+func TestAnalyzer_SchemaOrgJobPosting_Detected(t *testing.T) {
+	a := tier1.NewAnalyzer()
+	html := `<html><head>
+	<script type="application/ld+json">
+	{"@type": "JobPosting", "title": "Engineer", "url": "https://example.com/jobs/123"}
+	</script>
+	</head><body>Jobs</body></html>`
+
+	m := a.Analyze(html, "example.com")
+	if m == nil {
+		t.Fatal("expected schema_org_jobs match, got nil")
+	}
+	if m.Pattern != "schema_org_jobs" {
+		t.Fatalf("expected 'schema_org_jobs', got %q", m.Pattern)
+	}
+	if m.APIURL != "https://example.com/jobs/123" {
+		t.Fatalf("expected URL https://example.com/jobs/123, got %q", m.APIURL)
+	}
+}
+
+func TestAnalyzer_SchemaOrgGraph_Detected(t *testing.T) {
+	a := tier1.NewAnalyzer()
+	html := `<html><head>
+	<script type="application/ld+json">
+	{"@graph": [{"@type": "Organization"}, {"@type": "JobPosting", "url": "https://example.com/jobs/456"}]}
+	</script>
+	</head><body>Jobs</body></html>`
+
+	m := a.Analyze(html, "example.com")
+	if m == nil {
+		t.Fatal("expected schema_org_jobs match for @graph, got nil")
+	}
+	if m.Pattern != "schema_org_jobs" {
+		t.Fatalf("expected 'schema_org_jobs', got %q", m.Pattern)
+	}
+	if m.APIURL != "https://example.com/jobs/456" {
+		t.Fatalf("expected URL https://example.com/jobs/456, got %q", m.APIURL)
+	}
+}

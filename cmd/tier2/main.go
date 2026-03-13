@@ -31,7 +31,7 @@ import (
 
 	"github.com/careerscout/careerscout/internal/db"
 	"github.com/careerscout/careerscout/internal/queue"
-	"github.com/careerscout/careerscout/internal/tier2"
+	"github.com/careerscout/careerscout/internal/tier2_v3"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -73,9 +73,10 @@ func main() {
 	}
 	defer consumer.Close()
 
-	// ── Worker pool ───────────────────────────────────────────────────────────
+	// ── Worker pool ─────────────────────────────────────────────────────────	// ── Browser (singleton rod browser + tab pool) ──
 	workers := getEnvInt("TIER2_WORKERS", 50)
-	pool := tier2.NewWorkerPool(workers, log)
+	wp := tier2_v3.NewWorkerPool(ctx, workers, log, nil, "")
+	defer wp.Close()
 	sem := make(chan struct{}, workers)
 
 	log.Info("tier2 CDP worker ready",
@@ -98,12 +99,12 @@ func main() {
 			go func() {
 				defer func() { <-sem }()
 
-				workCtx, workCancel := context.WithTimeout(ctx, 30*time.Second)
+				workCtx, workCancel := context.WithTimeout(ctx, 60*time.Second) // Increased to 60s for M2 swap latency
 				defer workCancel()
 
-				result := pool.Process(workCtx, msg.RawURL, msg.Domain, msg.CompanyID)
+				result := wp.Process(workCtx, msg.RawURL, msg.Domain, msg.CompanyID)
 
-				if err := handleResult(workCtx, result, dbClient, producer, log); err != nil {
+				if err := handleResult(workCtx, msg, result, dbClient, producer, log); err != nil {
 					log.Error("handle result failed",
 						zap.String("domain", msg.Domain),
 						zap.Error(err),
@@ -126,9 +127,9 @@ func main() {
 	log.Info("tier2 worker shut down cleanly")
 }
 
-func handleResult(ctx context.Context, result tier2.CDPResult, dbClient *db.Client, producer *queue.Producer, log *zap.Logger) error {
+func handleResult(ctx context.Context, msg urlMessage, result tier2_v3.CDPResult, dbClient *db.Client, producer *queue.Producer, log *zap.Logger) error {
 	if result.Success {
-		if err := dbClient.MarkDiscovered(ctx, result.Domain, db.TierTwo, result.APIURL, result.HTTPMethod, result.Body, result.Confidence); err != nil {
+		if err := dbClient.MarkDiscovered(ctx, msg.CompanyID, msg.Domain, db.TierTwo, result.APIURL, result.HTTPMethod, result.Body, result.Confidence); err != nil {
 			return fmt.Errorf("mark discovered: %w", err)
 		}
 
@@ -148,18 +149,18 @@ func handleResult(ctx context.Context, result tier2.CDPResult, dbClient *db.Clie
 	}
 
 	// Failure — forward to Tier 3
-	if err := dbClient.MarkFailed(ctx, result.Domain, result.Error); err != nil {
+	if err := dbClient.MarkFailed(ctx, msg.CompanyID, msg.Domain, result.Error); err != nil {
 		log.Warn("mark failed in db", zap.String("domain", result.Domain), zap.Error(err))
 	}
 
-	msg := map[string]interface{}{
+	failMsg := map[string]interface{}{
 		"domain":            result.Domain,
 		"raw_url":           result.RawURL,
 		"company_id":        result.CompanyID,
 		"queued_at":         time.Now(),
 		"tier2_fail_reason": result.Error,
 	}
-	b, _ := json.Marshal(msg)
+	b, _ := json.Marshal(failMsg)
 	return producer.Produce(ctx, queue.TopicTier3Queue, result.Domain, b)
 }
 

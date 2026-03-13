@@ -1,0 +1,13 @@
+DELETE FROM discovery_records WHERE api_url LIKE '%cookielaw.org%';
+DELETE FROM discovery_records WHERE api_url LIKE '%statuspage.io%';
+DELETE FROM discovery_records WHERE api_url LIKE '%cognito-identity%';
+DELETE FROM discovery_records WHERE api_url LIKE '%onetrust.com%';
+DELETE FROM discovery_records WHERE api_url LIKE '%killswitch%';
+DELETE FROM discovery_records WHERE api_url LIKE '%initialize?k=%';
+DELETE FROM discovery_records WHERE api_url LIKE '%global-elements%';
+DELETE FROM discovery_records WHERE api_url LIKE '%graphql.contentful.com%';
+DELETE FROM discovery_records WHERE api_url LIKE '%coc_event%';
+DELETE FROM discovery_records WHERE api_url LIKE '%KillSwitches%';
+DELETE FROM discovery_records WHERE api_url LIKE '%globalSettings%';
+DELETE FROM discovery_records WHERE confidence < 0.60;
+SELECT COUNT(*) AS remaining_discoveries FROM discovery_records WHERE status = 'discovered';

@@ -1,17 +1,25 @@
+//go:build ignore
+
+// Retired: superseded by cmd/discover. Remove after 30-day production validation.
 // cmd/tier1 is the entry point for Team 2 — Tier 1 Static Discovery Worker.
 //
 // This service:
 //  1. Consumes URLs from the `urls.tier1_queue` Redpanda topic
-//  2. Issues direct HTTP GET requests with Chrome-mimicking TLS fingerprints
+//  2. Issues direct fasthttp GET requests with Chrome-mimicking TLS fingerprints
 //  3. Analyzes static HTML/JS for hardcoded job API endpoint patterns
 //  4. On success: emits to `apis.discovered` + updates Postgres
-//  5. On failure: forwards to `urls.tier2_queue` for CDP interception
+//  5. On failure: forwards to `urls.tier2_queue` for browser interception
+//
+// Scale-up guide: to increase throughput on a larger machine, set:
+// WORKER_COUNT=3000 BROWSER_TABS=80 DNS_CONCURRENCY=50 DB_POOL_SIZE=50
+// No code changes required.
 //
 // Environment variables:
 //
 //	DATABASE_URL       — Postgres DSN (required)
 //	REDPANDA_BROKERS   — Comma-separated broker list (default: localhost:19092)
-//	TIER1_WORKERS      — Number of parallel workers (default: 200)
+//	WORKER_COUNT       — Number of parallel workers (default: 150)
+//	DB_POOL_SIZE       — Postgres max connections (default: 20)
 //	LOG_LEVEL          — debug|info|warn|error (default: info)
 package main
 
@@ -28,6 +36,7 @@ import (
 
 	"github.com/careerscout/careerscout/internal/db"
 	"github.com/careerscout/careerscout/internal/queue"
+	"github.com/careerscout/careerscout/internal/resolver"
 	"github.com/careerscout/careerscout/internal/tier1"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -45,11 +54,22 @@ func main() {
 
 	log.Info("CareerScout Tier1 Worker starting")
 
+	// ── Concurrency config — all env-driven, validated at startup ─────────────
+	workerCount := mustEnvInt(log, "WORKER_COUNT", 150)
+	dbPoolSize := mustEnvInt(log, "DB_POOL_SIZE", 20)
+	dnsConcurrency := mustEnvInt(log, "DNS_CONCURRENCY", 8)
+
+	log.Info("startup config resolved",
+		zap.Int("WORKER_COUNT", workerCount),
+		zap.Int("DB_POOL_SIZE", dbPoolSize),
+		zap.Int("DNS_CONCURRENCY", dnsConcurrency),
+	)
+
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
 
 	// ── Database ──────────────────────────────────────────────────────────────
-	dbClient, err := db.New(ctx, mustEnv(log, "DATABASE_URL"))
+	dbClient, err := db.NewWithPoolSize(ctx, mustEnvStr(log, "DATABASE_URL"), dbPoolSize)
 	if err != nil {
 		log.Fatal("database connect failed", zap.Error(err))
 	}
@@ -70,14 +90,20 @@ func main() {
 	}
 	defer consumer.Close()
 
+	// ── DNS Resolver ──────────────────────────────────────────────────────────
+	res, err := resolver.NewCachingResolver(dnsConcurrency)
+	if err != nil {
+		log.Fatal("resolver init failed", zap.Error(err))
+	}
+
 	// ── Worker pool ───────────────────────────────────────────────────────────
-	workers := getEnvInt("TIER1_WORKERS", 200)
-	worker := tier1.NewWorker(log)
+	// NewWorkerWithMaxConns sizes the fasthttp connection pool to match concurrency.
+	worker := tier1.NewWorkerWithMaxConns(log, workerCount, res)
 	emitter := tier1.NewEmitter(dbClient, producer, log)
-	sem := make(chan struct{}, workers)
+	sem := make(chan struct{}, workerCount)
 
 	log.Info("tier1 worker ready",
-		zap.Int("concurrency", workers),
+		zap.Int("concurrency", workerCount),
 		zap.String("topic", queue.TopicTier1Queue),
 	)
 
@@ -117,12 +143,14 @@ func main() {
 		}
 	}
 
-	// Drain
-	for i := 0; i < workers; i++ {
+	// Drain in-flight goroutines
+	for i := 0; i < workerCount; i++ {
 		sem <- struct{}{}
 	}
 	log.Info("tier1 worker shut down cleanly")
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 func newLogger(level string) *zap.Logger {
 	lvl := zapcore.InfoLevel
@@ -140,7 +168,7 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-func mustEnv(log *zap.Logger, key string) string {
+func mustEnvStr(log *zap.Logger, key string) string {
 	v := os.Getenv(key)
 	if v == "" {
 		log.Fatal("required env var missing", zap.String("key", key))
@@ -148,11 +176,20 @@ func mustEnv(log *zap.Logger, key string) string {
 	return v
 }
 
-func getEnvInt(key string, fallback int) int {
-	if v := os.Getenv(key); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
+// mustEnvInt reads an int env var with the given default.
+// If the variable is set to an invalid value (zero, negative, non-integer),
+// the process exits with a clear error message.
+func mustEnvInt(log *zap.Logger, key string, def int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
 	}
-	return fallback
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		log.Fatal("env var must be an integer", zap.String("key", key), zap.String("value", v))
+	}
+	if n <= 0 {
+		log.Fatal("env var must be a positive integer", zap.String("key", key), zap.Int("value", n))
+	}
+	return n
 }

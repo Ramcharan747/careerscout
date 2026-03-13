@@ -89,6 +89,7 @@ func NewConsumer(ctx context.Context, brokers []string, groupID string, topics [
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(groupID),
 		kgo.ConsumeTopics(topics...),
+		kgo.ConsumeResetOffset(kgo.NewOffset().AtEnd()),
 		kgo.DisableAutoCommit(),
 		kgo.FetchMaxWait(500*time.Millisecond),
 		kgo.FetchMaxBytes(10_000_000), // 10 MB

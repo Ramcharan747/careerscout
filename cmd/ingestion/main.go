@@ -1,3 +1,6 @@
+//go:build ignore
+
+// Retired: superseded by cmd/discover. Remove after 30-day production validation.
 // cmd/ingestion is the entry point for Team 1 — URL Ingestion & Tier Routing.
 //
 // This service:
@@ -11,6 +14,7 @@
 //	DATABASE_URL       — Postgres DSN (required)
 //	REDPANDA_BROKERS   — Comma-separated broker list (default: localhost:19092)
 //	INGESTION_WORKERS  — Number of parallel routing goroutines (default: 50)
+//	BLOOM_STATE_PATH   — Path to persist Bloom filter state across restarts (default: ./bloom.bin)
 //	LOG_LEVEL          — Zap log level: debug|info|warn|error (default: info)
 package main
 
@@ -71,7 +75,30 @@ func main() {
 
 	// ── Router setup ──────────────────────────────────────────────────────────
 	rl := ingestion.NewRateLimiter()
-	router := ingestion.NewRouter(dbClient, producer, rl, log)
+	// Allocate the Bloom filter once per run. It is shared across all worker
+	// goroutines via the Router. ~24MB for 10M entries at 0.01% FP rate.
+	bloom := ingestion.NewBloomDeduper()
+
+	// Load persisted state from disk so deduplication spans across restarts.
+	// If the file is missing (first run) Load returns nil — bloom starts fresh.
+	bloomPath := getEnv("BLOOM_STATE_PATH", "./bloom.bin")
+	if err := bloom.Load(bloomPath); err != nil {
+		log.Warn("failed to load Bloom state, starting fresh", zap.String("path", bloomPath), zap.Error(err))
+	} else {
+		log.Info("bloom state loaded", zap.String("path", bloomPath), zap.Uint("approx_domains", bloom.Count()))
+	}
+
+	// Save Bloom state on clean shutdown so the next run inherits dedup history.
+	defer func() {
+		if err := bloom.Save(bloomPath); err != nil {
+			log.Error("failed to save Bloom state on shutdown", zap.String("path", bloomPath), zap.Error(err))
+		} else {
+			log.Info("bloom state saved", zap.String("path", bloomPath), zap.Uint("domains_written", bloom.Count()))
+		}
+	}()
+
+	router := ingestion.NewRouter(dbClient, producer, rl, bloom, log)
+	log.Info("bloom deduper initialised", zap.Uint("capacity", bloom.Count()))
 
 	workers := getEnvInt("INGESTION_WORKERS", 50)
 	sem := make(chan struct{}, workers) // semaphore to cap concurrency

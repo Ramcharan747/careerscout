@@ -28,17 +28,16 @@ func NewRateLimiter() *RateLimiter {
 
 // Allow returns true if the domain may be processed right now.
 // If allowed, it updates the last-seen timestamp atomically.
-func (r *RateLimiter) Allow(domain string) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (rl *RateLimiter) Allow(domain string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
 
-	last, seen := r.lastSeen[domain]
-	if seen && time.Since(last) < domainCooldown {
-		return false
+	last, exists := rl.lastSeen[domain]
+	if !exists || time.Since(last) >= domainCooldown {
+		rl.lastSeen[domain] = time.Now()
+		return true
 	}
-
-	r.lastSeen[domain] = time.Now()
-	return true
+	return false
 }
 
 // Reset removes the rate limit entry for a domain, allowing it to be processed

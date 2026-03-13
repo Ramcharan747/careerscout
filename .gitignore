@@ -1,111 +1,118 @@
-# Binaries for programs and plugins
+# ── Compiled Binaries ─────────────────────────────────────────────────────────
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-
-# Compiled Go output
-bin/
-main
-careerscout-bin
-
-# Test binary, built with `go test -c`
 *.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Named binaries (root-level Go build output only)
+/career_finder
+/discover
+/fetch_jobs
+/fetch_jobs_linux
+/harvest_companies_linux
+/harvest_urls
+/probe_ats
+/probe_ats_linux
+/probe_workday
+/review_nearmiss
+/tier2
+/tier2_v3
+/verify_custom
+bin/
 
-# Rust / Cargo
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Data & Artifacts (generated at runtime) ───────────────────────────────────
+*.ndjson
+*.csv
+*.json
+!package.json
+!tsconfig.json
+!go.mod
+!go.sum
+*.txt
+!requirements.txt
+!LICENSE.txt
+wayback_*.txt
+crtsh_*.txt
+extracted_*.txt
+workday_companies.txt
+discovered_urls.txt
+reachable_urls.txt
+
+# Checkpoint files
+*_checkpoint.json
+probe_checkpoint.json
+probe_results.json
+
+# ── Rust / Cargo ──────────────────────────────────────────────────────────────
 target/
 **/*.rs.bk
 Cargo.lock
 
-# Python
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
 *.egg-info/
-.installed.cfg
 *.egg
-MANIFEST
-
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
-
-# Installer logs
+.installed.cfg
 pip-log.txt
 pip-delete-this-directory.txt
-
-# Unit test / coverage reports
 htmlcov/
 .tox/
 .nox/
 .coverage
 .coverage.*
 .cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
 .pytest_cache/
-cover/
-
-# Jupyter Notebook
+.hypothesis/
 .ipynb_checkpoints
+*.ipynb
 
-# Environments
+# gRPC generated
+*_pb2.py
+*_pb2_grpc.py
+
+# ── Environments ──────────────────────────────────────────────────────────────
 .env
 .venv
 env/
 venv/
 ENV/
-env.bak/
-venv.bak/
 
-# Terraform
+# ── Terraform ─────────────────────────────────────────────────────────────────
 .terraform/
 *.tfstate
 *.tfstate.backup
 
-# macOS
+# ── Docker Volumes ────────────────────────────────────────────────────────────
+redpanda_data/
+postgres_data/
+redis_data/
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
 .DS_Store
 .AppleDouble
 .LSOverride
 
-# Redpanda/Postgres Local Data
-redpanda_data/
-postgres_data/
-redis_data/
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+backups/
 *.db
 *.sqlite3
-
-# gRPC generated python output
-*_pb2.py
-*_pb2_grpc.py
+data/
+feedback.json
+validation_results.json
