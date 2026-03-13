@@ -9,6 +9,7 @@
 [![Python](https://img.shields.io/badge/Python-ML-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+[![CI](https://github.com/Ramcharan747/careerscout/actions/workflows/ci.yml/badge.svg)](https://github.com/Ramcharan747/careerscout/actions/workflows/ci.yml)
 
 *Discovers career pages, detects ATS platforms, extracts job APIs, and normalises job data — all at scale.*
 
