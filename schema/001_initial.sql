@@ -125,3 +125,4 @@ CREATE TRIGGER trg_discovery_updated_at
 CREATE TRIGGER trg_jobs_updated_at
     BEFORE UPDATE ON jobs
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+

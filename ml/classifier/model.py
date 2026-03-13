@@ -224,3 +224,4 @@ class Classifier:
         score = float(arr.sum())
         confidence = min(score / 8.0, 1.0)
         return confidence >= 0.4, confidence
+

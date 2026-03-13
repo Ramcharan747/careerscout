@@ -36,3 +36,4 @@ impl AuthRefresher {
         Ok(())
     }
 }
+

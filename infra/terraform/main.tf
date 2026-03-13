@@ -244,3 +244,4 @@ resource "aws_ssm_parameter" "database_url" {
 variable "redpanda_brokers" {
   description = "Comma-separated Redpanda broker list"
 }
+

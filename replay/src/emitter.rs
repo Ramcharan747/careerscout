@@ -50,3 +50,4 @@ impl Emitter {
         Ok(())
     }
 }
+

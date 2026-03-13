@@ -142,3 +142,4 @@ async fn update_last_replayed(db: &PgPool, record_id: &Uuid) -> Result<()> {
     .await?;
     Ok(())
 }
+
