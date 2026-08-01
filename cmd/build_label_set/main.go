@@ -123,9 +123,18 @@ func domOf(path, embedded string) string {
 	return strings.TrimSuffix(filepath.Base(path), ".html.gz")
 }
 
-// l2SuffixRe strips the __l2_N marker that cmd/expand_career_links appends so a
-// second-level page keys back to the firm it belongs to.
-var l2SuffixRe = regexp.MustCompile(`__l2_\d+$`)
+// depthKeyRe splits the __l<depth>_<n> marker that cmd/expand_career_links
+// appends, so a deep page keys back to the firm it belongs to and reports how
+// many hops in it was found.
+var depthKeyRe = regexp.MustCompile(`^(.*)__l(\d+)_(\d+)$`)
+
+func splitKey(key string) (domain string, depth int) {
+	if m := depthKeyRe.FindStringSubmatch(key); m != nil {
+		d, _ := strconv.Atoi(m[2])
+		return m[1], d
+	}
+	return key, 1
+}
 
 // readDomainFilter loads the "domain" column of a CSV, or one domain per line
 // from a plain text file. Used to weight a labelling round towards a population
@@ -175,11 +184,11 @@ func archive(storeDir string, only map[string]bool) []string {
 			continue
 		}
 		if only != nil {
-			key := strings.TrimSuffix(e.Name(), ".html.gz")
-			// A level-2 page inherits its parent firm's membership, otherwise
-			// the deeper pages — the ones most likely to hold the real list —
+			// A deep page inherits its parent firm's membership, otherwise the
+			// pages furthest in — the ones most likely to hold the real list —
 			// would be filtered out of every targeted sample.
-			if !only[strings.ToLower(l2SuffixRe.ReplaceAllString(key, ""))] {
+			dom, _ := splitKey(strings.TrimSuffix(e.Name(), ".html.gz"))
+			if !only[strings.ToLower(dom)] {
 				continue
 			}
 		}
@@ -217,18 +226,33 @@ func stage1(storeDir, outPath string, nPages int, seed int64, jobsCSV string, on
 		f.Close()
 	}
 
-	var hit, miss []string
-	for _, p := range archive(storeDir, only) {
-		if yielding[strings.TrimSuffix(filepath.Base(p), ".html.gz")] {
-			hit = append(hit, p)
-		} else {
-			miss = append(miss, p)
-		}
+	// Strata are (depth, yields-jobs). Depth matters as much as yield: a
+	// landing page and the page three hops in behind "Search careers" fail in
+	// different ways, and an archive is mostly landing pages, so an unstratified
+	// sample is nearly all depth 1 and teaches nothing about the redirects.
+	type stratum struct {
+		depth  int
+		yields bool
 	}
-	log.Printf("archive: %d currently yielding, %d not", len(hit), len(miss))
+	buckets := map[stratum][]string{}
+	depths := map[int]bool{}
+	for _, p := range archive(storeDir, only) {
+		key := strings.TrimSuffix(filepath.Base(p), ".html.gz")
+		_, d := splitKey(key)
+		s := stratum{d, yielding[key]}
+		buckets[s] = append(buckets[s], p)
+		depths[d] = true
+	}
+	var ds []int
+	for d := range depths {
+		ds = append(ds, d)
+	}
+	sort.Ints(ds)
+	for _, d := range ds {
+		log.Printf("archive depth %d: %d yielding, %d not",
+			d, len(buckets[stratum{d, true}]), len(buckets[stratum{d, false}]))
+	}
 
-	// Half from each stratum. False positives live in one, false negatives in
-	// the other; a sample drawn only from successes teaches nothing.
 	rng := rand.New(rand.NewSource(seed))
 	pick := func(src []string, n int) []string {
 		if len(src) <= n {
@@ -240,7 +264,38 @@ func stage1(storeDir, outPath string, nPages int, seed int64, jobsCSV string, on
 		}
 		return out
 	}
-	sample := append(pick(hit, nPages/2), pick(miss, nPages-nPages/2)...)
+
+	// Even split across depths, then half yielding and half not within each.
+	// False positives live in one half, false negatives in the other; a sample
+	// drawn only from successes teaches nothing.
+	var sample []string
+	perDepth := nPages / len(ds)
+	for i, d := range ds {
+		want := perDepth
+		if i == len(ds)-1 {
+			want = nPages - perDepth*(len(ds)-1)
+		}
+		got := append(pick(buckets[stratum{d, true}], want/2),
+			pick(buckets[stratum{d, false}], want-want/2)...)
+		// A shallow archive cannot fill a deep quota; spend the remainder on
+		// depth 1 rather than shipping a short sheet.
+		sample = append(sample, got...)
+	}
+	if len(sample) < nPages {
+		pool := append(append([]string{}, buckets[stratum{1, true}]...),
+			buckets[stratum{1, false}]...)
+		have := map[string]bool{}
+		for _, s := range sample {
+			have[s] = true
+		}
+		var rest []string
+		for _, p := range pool {
+			if !have[p] {
+				rest = append(rest, p)
+			}
+		}
+		sample = append(sample, pick(rest, nPages-len(sample))...)
+	}
 	sort.Strings(sample)
 
 	f, err := os.Create(outPath)
@@ -250,7 +305,7 @@ func stage1(storeDir, outPath string, nPages int, seed int64, jobsCSV string, on
 	defer f.Close()
 	w := csv.NewWriter(f)
 	defer w.Flush()
-	_ = w.Write([]string{"label", "domain", "page_url", "page_title",
+	_ = w.Write([]string{"label", "domain", "depth", "page_url", "page_title",
 		"parser_extracted", "n_groups", "best_score",
 		"top_sample_1", "top_sample_2", "top_sample_3", "text_preview"})
 
@@ -290,7 +345,8 @@ func stage1(storeDir, outPath string, nPages int, seed int64, jobsCSV string, on
 			extracted = "yes"
 		}
 
-		_ = w.Write([]string{"", dom, pageURL, pageTitle, extracted,
+		_, depth := splitKey(dom)
+		_ = w.Write([]string{"", dom, strconv.Itoa(depth), pageURL, pageTitle, extracted,
 			strconv.Itoa(nGroups), best, s1, s2, s3, preview})
 		n++
 	}

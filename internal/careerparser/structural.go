@@ -25,11 +25,27 @@ var (
 	// css-1x9k2h). Stripping them lets siblings collapse to one signature.
 	classNoiseRe = regexp.MustCompile(`[0-9]+|--[a-z0-9]{4,}|_[a-z0-9]{5,}`)
 
+	// Job vocabulary across the languages actually present in the archive.
+	// Measured on 900 random pages, the English-only version fired on 81% of
+	// English pages but 36% of French, 20% of Danish and 0% of Finnish ones —
+	// a keyword gate quietly turns into a language filter, and the sites it was
+	// dropping are exactly the mid-market European ones worth finding.
 	jobVocabRe = regexp.MustCompile(`(?i)job|career|vacan|position|opening|opportunit|` +
-		`role|listing|posting|stelle|vacature|emploi|jobb|empleo|posizion|recruit`)
+		`role|listing|posting|recruit|hiring|` +
+		`stelle|stellen|karriere|bewerb|mitarbeiter|` + // de
+		`vacature|banen|werken bij|` + // nl
+		`emploi|offre|poste|carri[eè]re|recrutement|candidature|rejoign|` + // fr
+		`jobb|lediga|tj[aä]nster|karri[aä]r|` + // sv
+		`stilling|ledige|` + // da/no
+		`ty[oö]paik|avoimet|\bura\b|rekrytoin|` + // fi
+		`empleo|oferta|puesto|trabajo|carrera|` + // es
+		`posizion|lavoro|carriere|offerte|` + // it
+		`praca|kariera|oferty|` + // pl
+		`emprego|carreira|vaga`) // pt
 
-	locVocabRe = regexp.MustCompile(`(?i)location|office|city|country|region|place|standort|` +
-		`remote|hybrid|onsite|on-site`)
+	locVocabRe = regexp.MustCompile(`(?i)location|office|city|country|region|place|` +
+		`remote|hybrid|onsite|on-site|` +
+		`standort|ort|sted|plats|sijainti|lugar|luogo|lieu|locatie|miejsce`)
 
 	deptVocabRe = regexp.MustCompile(`(?i)department|team|category|function|discipline|abteilung`)
 
