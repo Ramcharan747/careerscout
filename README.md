@@ -29,7 +29,7 @@ CareerScout is a **multi-stage intelligence pipeline** that automatically:
 4. **Probes** ATS platforms directly to find companies the web missed
 5. **Fetches** and **normalises** structured job data from every discovered source
 
-It supports **17 ATS platforms** out of the box and has been tested against **5.5 million company domains**.
+It supports **22 ATS platforms** out of the box and has been tested against **5.5 million company domains**.
 
 ---
 
@@ -81,7 +81,7 @@ CareerScout is built as a collection of focused, standalone Go binaries:
 
 | Tool | Description |
 |------|-------------|
-| `cmd/career_finder` | Probes 7 URL patterns across millions of domains to find career pages. Detects 15+ ATS platforms via HTML analysis of `href`/`src` attributes. 200 concurrent workers with configurable timeouts. |
+| `cmd/career_finder` | Probes 25 URL patterns (English, German, Dutch, French, Nordic, Italian, Spanish) across millions of domains to find career pages. Detects 22 ATS platforms via HTML analysis of `href`/`src` attributes. 200 concurrent workers with configurable timeouts. |
 | `cmd/probe_ats` | Brute-force probes slugs against 14 ATS APIs (Greenhouse, Lever, Ashby, Workable, BambooHR, Recruitee, Teamtailor, Rippling, Pinpoint, Freshteam, SmartRecruiters, Jobvite, BreezyHR, Personio). |
 | `cmd/probe_workday` | Specialised Workday prober — tests 4 environments (`wd1`/`wd3`/`wd5`/`wd12`) × 8 fallback board names per company. |
 | `cmd/harvest_companies` | Extracts company slugs from Wayback Machine, CT logs, and web scraping. |
@@ -96,6 +96,8 @@ CareerScout is built as a collection of focused, standalone Go binaries:
 | `cmd/tier1` | Static HTTP analysis worker — pattern matching for API endpoints. |
 | `cmd/tier2` | CDP-based Chromium worker — intercepts XHR/Fetch calls to capture hidden APIs. |
 | `cmd/normalise` | Transforms raw API responses into structured job records using schema-driven parsing. |
+| `cmd/fetch_career_html` | Archives the raw HTML of every discovered career page to `html_store/*.html.gz`, so the parser can be iterated offline without re-crawling. Checkpointed and resumable. |
+| `cmd/parse_career_jobs` | Extracts job listings from the HTML archive for firms with **no ATS**, via `internal/careerparser`. Outputs `career_jobs.csv`. |
 
 ### Analysis & Quality
 
@@ -126,6 +128,23 @@ CareerScout is built as a collection of focused, standalone Go binaries:
 | Jobvite | ✅ | ✅ | ✅ |
 | BreezyHR | ✅ | ✅ | ✅ |
 | Personio | ✅ | ✅ | ✅ |
+| softgarden | ✅ | — | — |
+| join.com | ✅ | — | — |
+| HeyJobs | ✅ | — | — |
+| SAP SuccessFactors | ✅ | — | — |
+| iCIMS | ✅ | — | — |
+| JazzHR | ✅ | — | — |
+| Workday (myworkdaysite) | ✅ | — | — |
+
+The last seven are detection-only for now and were added to cover European
+hiring stacks, which are under-represented by the US-centric platforms above.
+
+### Firms with no ATS at all
+
+Roughly half of all companies with a career page do not use a recognised ATS —
+they hand-write openings straight into HTML. Those firms are invisible to slug
+resolution, so `internal/careerparser` extracts jobs from the page markup
+itself. See [Non-ATS extraction](#non-ats-extraction).
 
 ---
 
@@ -245,9 +264,51 @@ GOOS=linux GOARCH=amd64 go build -o fetch_jobs ./cmd/fetch_jobs
 
 ## 🔧 How It Works
 
+### Non-ATS extraction
+
+Slug resolution only works for companies that actually use an ATS. In practice
+**roughly half of all firms with a career page do not** — they hand-write their
+openings straight into HTML. Those companies are systematically missing from any
+ATS-only pipeline, and they skew small and mid-size, which is exactly where
+targeted searches tend to point.
+
+`internal/careerparser` closes that gap. It runs three strategies in order of
+decreasing confidence and stops at the first that yields results:
+
+| Strategy | Confidence | What it matches |
+|----------|:----------:|-----------------|
+| `jsonld`   | 0.95 | schema.org `JobPosting` embedded as JSON-LD, including `@graph` |
+| `links`    | 0.70 | three or more anchors sharing a job-shaped URL prefix |
+| `headings` | 0.45 | list items or headings that read like job titles |
+
+Requiring **three** repeated links before treating anything as a listing is what
+keeps navigation ("Careers", "View all jobs") out of the results. Titles are
+additionally screened against a noise pattern and a length window.
+
+Extraction is deliberately split from crawling:
+
+```bash
+# 1. discover career pages and ATS slugs
+./career_finder                         # → career_pages.csv, new_ats_sources.csv
+
+# 2. archive the HTML once
+./fetch_career_html                     # → html_store/*.html.gz
+
+# 3. parse offline, re-run freely while tuning
+./parse_career_jobs                     # → career_jobs.csv
+MIN_CONF=0.7 ./parse_career_jobs        # high-confidence rows only
+```
+
+A crawler cannot be improved mid-run without redoing the whole sweep, but a
+parser can be iterated indefinitely against an archive. Storing the HTML once
+turns every later parser change into a local re-run instead of another
+multi-thousand-domain crawl.
+
 ### Career Page Discovery
 
-The `career_finder` tool takes a list of company domains and probes 7 common URL patterns:
+The `career_finder` tool takes a list of company domains and probes 25 URL
+patterns spanning English, German, Dutch, French, Nordic, Italian and Spanish
+conventions:
 
 ```
 https://domain.com/careers
@@ -296,7 +357,7 @@ Workday is the largest enterprise ATS but has no public directory. CareerScout u
 ## 🔬 Technical Highlights
 
 - **Zero-browser job fetching** — Once an API endpoint is discovered, jobs are fetched via simple HTTP forever
-- **Schema-driven parsing** — 17 ATS schemas with dot-notation field paths, array indexing, and lookup tables
+- **Schema-driven parsing** — 22 ATS schemas with dot-notation field paths, array indexing, and lookup tables
 - **Platform-specific protocols** — POST for Workable/Ashby, GraphQL for Ashby, GET for most others
 - **Concurrent architecture** — 200 goroutine worker pools with per-platform rate limiting
 - **Checkpoint/resume** — Every tool supports crash recovery via JSON checkpointing

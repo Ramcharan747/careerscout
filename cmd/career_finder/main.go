@@ -129,6 +129,42 @@ var atsPatterns = []ATSPattern{
 		Match: "bamboohr.com",
 		SlugRe: regexp.MustCompile(`([a-zA-Z0-9_-]+)\.bamboohr\.com`),
 	},
+	// ── EU-weighted additions ────────────────────────────────────────────────
+	{
+		Name:  "softgarden",
+		Match: "softgarden.io",
+		SlugRe: regexp.MustCompile(`([a-zA-Z0-9_-]+)\.softgarden\.io`),
+	},
+	{
+		Name:  "join",
+		Match: "join.com",
+		SlugRe: regexp.MustCompile(`join\.com/companies/([a-zA-Z0-9_-]+)`),
+	},
+	{
+		Name:  "heyjobs",
+		Match: "heyjobs.co",
+		SlugRe: regexp.MustCompile(`heyjobs\.co/[a-z-]*?/?companies/([a-zA-Z0-9_-]+)`),
+	},
+	{
+		Name:  "successfactors",
+		Match: "successfactors.",
+		SlugRe: regexp.MustCompile(`([a-zA-Z0-9_-]+)\.(?:jobs\.)?successfactors\.(?:com|eu|de)`),
+	},
+	{
+		Name:  "icims",
+		Match: "icims.com",
+		SlugRe: regexp.MustCompile(`([a-zA-Z0-9_-]+)\.(?:icims\.com|talent\.icims\.com)`),
+	},
+	{
+		Name:  "jazzhr",
+		Match: "applytojob.com",
+		SlugRe: regexp.MustCompile(`([a-zA-Z0-9_-]+)\.applytojob\.com`),
+	},
+	{
+		Name:  "workdaysite",
+		Match: "myworkdaysite.com",
+		SlugRe: regexp.MustCompile(`([a-zA-Z0-9_-]+)\.[a-z0-9]+\.myworkdaysite\.com`),
+	},
 }
 
 // Regex to extract all href and src attribute values from HTML
@@ -197,13 +233,36 @@ func careerURLPatterns(domain string) []string {
 	domain = strings.TrimRight(domain, "/")
 
 	return []string{
+		// English
 		"https://" + domain + "/careers",
 		"https://" + domain + "/jobs",
 		"https://" + domain + "/about/careers",
 		"https://" + domain + "/company/careers",
 		"https://" + domain + "/en/careers",
+		"https://" + domain + "/en/jobs",
+		"https://" + domain + "/join-us",
+		"https://" + domain + "/work-with-us",
 		"https://careers." + domain,
 		"https://jobs." + domain,
+		// German (DACH)
+		"https://" + domain + "/karriere",
+		"https://" + domain + "/de/karriere",
+		"https://karriere." + domain,
+		// Dutch
+		"https://" + domain + "/vacatures",
+		"https://" + domain + "/werken-bij",
+		// French
+		"https://" + domain + "/carrieres",
+		"https://" + domain + "/carrieres-emploi",
+		"https://" + domain + "/recrutement",
+		"https://" + domain + "/nous-rejoindre",
+		// Nordics
+		"https://" + domain + "/jobb",
+		"https://" + domain + "/lediga-jobb",
+		// Italian / Spanish
+		"https://" + domain + "/lavora-con-noi",
+		"https://" + domain + "/empleo",
+		"https://" + domain + "/trabaja-con-nosotros",
 	}
 }
 
