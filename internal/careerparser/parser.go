@@ -96,6 +96,32 @@ func plausibleTitle(s string) bool {
 	return hasLetter
 }
 
+// urlBase resolves page-relative hrefs against the career page they came from.
+type urlBase struct{ u *url.URL }
+
+func newURLBase(pageURL string) *urlBase {
+	if pageURL == "" {
+		return &urlBase{}
+	}
+	u, err := url.Parse(pageURL)
+	if err != nil {
+		return &urlBase{}
+	}
+	return &urlBase{u: u}
+}
+
+func (b *urlBase) resolve(href string) string {
+	href = strings.TrimSpace(href)
+	if b == nil || b.u == nil || href == "" {
+		return href
+	}
+	ref, err := url.Parse(href)
+	if err != nil {
+		return href
+	}
+	return b.u.ResolveReference(ref).String()
+}
+
 func abs(base *url.URL, href string) string {
 	if base == nil {
 		return href
@@ -314,7 +340,12 @@ func Extract(html string, pageURL string) []Job {
 		base, _ = url.Parse(pageURL)
 	}
 
+	// Order is by confidence, not by cost. Declared data beats inferred
+	// structure, and inferred structure beats URL-shape guessing.
 	if jobs := fromJSONLD(doc, base); len(jobs) > 0 {
+		return dedupe(jobs)
+	}
+	if jobs := fromStructure(doc, newURLBase(pageURL)); len(jobs) >= 3 {
 		return dedupe(jobs)
 	}
 	if jobs := fromJobLinks(doc, base); len(jobs) > 0 {

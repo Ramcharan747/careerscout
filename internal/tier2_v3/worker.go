@@ -177,6 +177,9 @@ func (wp *WorkerPool) Process(ctx context.Context, rawURL, domain, companyID str
 	defer processCancel()
 	page = page.Context(processCtx)
 
+	// FIX: Force stop any runaway React loops or navigations before returning tab to pool
+	defer func() { _ = page.StopLoading() }()
+
 	// Reset to blank before reuse.
 	_ = page.Navigate("about:blank")
 

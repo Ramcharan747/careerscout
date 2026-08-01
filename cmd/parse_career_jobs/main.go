@@ -192,7 +192,7 @@ func main() {
 	}
 
 	log.Printf("DONE | pages parsed %d | pages with no jobs %d | jobs extracted %d", parsed, empty, len(out))
-	for _, m := range []string{"jsonld", "links", "headings"} {
+	for _, m := range []string{"jsonld", "structural", "links", "headings"} {
 		if byMeth[m] > 0 {
 			log.Printf("  %-9s %d", m, byMeth[m])
 		}

@@ -78,7 +78,7 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			client := &http.Client{Timeout: 15 * time.Second}
+			client := &http.Client{Timeout: 30 * time.Second}
 
 			for entry := range workCh {
 				envsToTry := []string{"wd1", "wd3", "wd5", "wd12"}

@@ -54,10 +54,55 @@ func TestJobLinksNeedRepetition(t *testing.T) {
 	if len(jobs) != 3 {
 		t.Fatalf("want 3 jobs, got %d: %+v", len(jobs), jobs)
 	}
+	// Either structural or links may claim these; structural takes precedence
+	// when the anchors are siblings sharing a shape.
 	for _, j := range jobs {
-		if j.Method != "links" {
-			t.Errorf("method = %s", j.Method)
+		if j.Method != "links" && j.Method != "structural" {
+			t.Errorf("unexpected method %s", j.Method)
 		}
+	}
+}
+
+// The point of structural extraction: job URLs carrying no job vocabulary at
+// all. The old URL-shape strategy scored zero on pages like this, which cost
+// ~51% of extractable pages in a 4,571-page measurement.
+func TestStructuralIgnoresURLVocabulary(t *testing.T) {
+	// The <h2> is required: fromStructure gates on the page announcing openings
+	// somewhere, because a repeating list of jobs is structurally identical to a
+	// repeating list of property adverts.
+	html := `<html><body><main><h2>Open positions</h2><ul class="listing">
+	  <li class="row"><a href="/p/8812">Deal Origination Analyst</a><span class="location">Amsterdam</span></li>
+	  <li class="row"><a href="/p/8813">Corporate Development Associate</a><span class="location">London</span></li>
+	  <li class="row"><a href="/p/8814">Investment Analyst</a><span class="location">Remote</span></li>
+	  <li class="row"><a href="/p/8815">Portfolio Operations Manager</a><span class="location">Berlin</span></li>
+	</ul></main></body></html>`
+
+	jobs := Extract(html, "https://fund.example/careers")
+	if len(jobs) != 4 {
+		t.Fatalf("want 4 jobs, got %d: %+v", len(jobs), jobs)
+	}
+	if jobs[0].Method != "structural" {
+		t.Errorf("method = %s, want structural", jobs[0].Method)
+	}
+	if jobs[0].URL != "https://fund.example/p/8812" {
+		t.Errorf("url = %q, not resolved", jobs[0].URL)
+	}
+	if jobs[0].Location != "Amsterdam" {
+		t.Errorf("location = %q", jobs[0].Location)
+	}
+}
+
+// Repetition alone must not qualify: a nav bar repeats too.
+func TestStructuralRejectsNavigation(t *testing.T) {
+	html := `<html><body><nav><ul>
+	  <li><a href="/about">About</a></li>
+	  <li><a href="/products">Products</a></li>
+	  <li><a href="/contact">Contact</a></li>
+	  <li><a href="/blog">Blog</a></li>
+	</ul></nav></body></html>`
+
+	if jobs := Extract(html, "https://x.com/careers"); len(jobs) != 0 {
+		t.Errorf("navigation should yield nothing, got %d: %+v", len(jobs), jobs)
 	}
 }
 
