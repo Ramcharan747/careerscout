@@ -98,12 +98,15 @@ CareerScout is built as a collection of focused, standalone Go binaries:
 | `cmd/normalise` | Transforms raw API responses into structured job records using schema-driven parsing. |
 | `cmd/fetch_career_html` | Archives the raw HTML of every discovered career page to `html_store/*.html.gz`, so the parser can be iterated offline without re-crawling. Checkpointed and resumable. |
 | `cmd/parse_career_jobs` | Extracts job listings from the HTML archive for firms with **no ATS**, via `internal/careerparser`. Outputs `career_jobs.csv`. |
+| `cmd/expand_career_links` | Reads the archive and emits the second-level pages a career page links to, for firms whose landing page only carries a "View open roles" button. Outputs `career_pages_l2.csv`. |
 
 ### Analysis & Quality
 
 | Tool | Description |
 |------|-------------|
 | `cmd/label_captures` | Interactive CLI for labeling API captures as job-related or false positives. |
+| `cmd/build_label_set` | Builds two-stage hand-labelling sheets for the career-page parser: stage 1 asks whether a page lists jobs at all, stage 2 whether an extracted row is a real posting. `DOMAINS=` restricts a round to one population. |
+| `scripts/label_pages.py` | Terminal labeller that serves the archived HTML from `127.0.0.1` and follows along in the browser as you answer. |
 | `cmd/review_nearmiss` | Reviews near-miss captures that almost matched job API patterns. |
 | `cmd/validate_urls` | Validates URL reachability and correctness before pipeline ingestion. |
 
@@ -272,18 +275,31 @@ openings straight into HTML. Those companies are systematically missing from any
 ATS-only pipeline, and they skew small and mid-size, which is exactly where
 targeted searches tend to point.
 
-`internal/careerparser` closes that gap. It runs three strategies in order of
+`internal/careerparser` closes that gap. It runs four strategies in order of
 decreasing confidence and stops at the first that yields results:
 
 | Strategy | Confidence | What it matches |
 |----------|:----------:|-----------------|
-| `jsonld`   | 0.95 | schema.org `JobPosting` embedded as JSON-LD, including `@graph` |
-| `links`    | 0.70 | three or more anchors sharing a job-shaped URL prefix |
-| `headings` | 0.45 | list items or headings that read like job titles |
+| `jsonld`     | 0.95 | schema.org `JobPosting` embedded as JSON-LD, including `@graph` |
+| `structural` | 0.80 | a repeating DOM group that behaves like a job list |
+| `links`      | 0.70 | three or more anchors sharing a job-shaped URL prefix |
+| `headings`   | 0.45 | list items or headings that read like job titles — **off by default** |
 
-Requiring **three** repeated links before treating anything as a listing is what
-keeps navigation ("Careers", "View all jobs") out of the results. Titles are
+A job list is a repeating structure first and a vocabulary second, which is why
+`structural` sits above the keyword strategies. It looks for three or more
+siblings sharing a `tag|classes|child-tags` signature, ignores anything inside
+navigation, menus, footers or carousels, and scores what is left on link ratio,
+link-path cohesion, member length, location markup and a nearby jobs heading.
+Link cohesion carries most of the weight because it is vocabulary-free: it holds
+on German, Dutch and French sites where every keyword list falls over.
+
+Requiring **three** repeated members before treating anything as a listing is
+what keeps navigation ("Careers", "View all jobs") out of the results. Titles are
 additionally screened against a noise pattern and a length window.
+
+`headings` is disabled unless `CAREERPARSER_HEADINGS=1` is set. Across a
+4,571-page archive it produced 118,947 rows of which roughly 93% were furniture
+("A place to be", "Coworking allowance"), which is worse than no rows at all.
 
 Extraction is deliberately split from crawling:
 
@@ -294,10 +310,22 @@ Extraction is deliberately split from crawling:
 # 2. archive the HTML once
 ./fetch_career_html                     # → html_store/*.html.gz
 
-# 3. parse offline, re-run freely while tuning
+# 3. follow "View open roles" buttons to the page that holds the real list
+./expand_career_links                   # → career_pages_l2.csv
+INPUT=career_pages_l2.csv ./fetch_career_html
+
+# 4. parse offline, re-run freely while tuning
 ./parse_career_jobs                     # → career_jobs.csv
 MIN_CONF=0.7 ./parse_career_jobs        # high-confidence rows only
 ```
+
+Many career pages advertise nothing themselves: they carry a button through to
+the real listing, and a one-page crawl concludes the firm is not hiring.
+`expand_career_links` reads the existing archive rather than re-crawling and
+emits second-level targets in `career_pages.csv` shape, so `fetch_career_html`
+consumes them with no changes. Pass `EXCLUDE=` a previous output to re-run
+safely after a later crawl — firms are topped up to `PER_DOMAIN` without reusing
+a key and overwriting an archive.
 
 A crawler cannot be improved mid-run without redoing the whole sweep, but a
 parser can be iterated indefinitely against an archive. Storing the HTML once
