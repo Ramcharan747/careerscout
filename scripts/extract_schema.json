@@ -8,7 +8,9 @@
     "WRITE EVERY FIELD IN ENGLISH. The pages are in German, French, Dutch, Swedish, Italian, Spanish, Finnish, Slovak and more; translate all of it. A German responsibility becomes an English sentence. Do not leave any field in the source language.",
     "The only exceptions are the three fields suffixed _original, which keep the exact source string because it is needed to find the posting again, quote it in an application, or search the site. Everything else is English.",
     "Always fill firm.name, firm.domain and firm.country, even when the pages themselves do not restate them — they are supplied with the input.",
-    "Every domain given must appear in the output exactly once, keyed by domain."
+    "Every domain given must appear in the output exactly once, keyed by domain.",
+    "You are ALSO given, per firm, a machine-extracted `apply_targets` block: exact form action URLs, exact field names, mail addresses, and the raw sentence around each address. Those strings are character-exact and must be copied through UNCHANGED into your output — never rewrite, shorten or tidy a field name or a URL. Your job on that block is to interpret it: say in English what the firm asks you to send, and flag anything it forbids.",
+    "Do NOT write a full detailed record for every posting. Index them all shallowly, then write the deep record for AT MOST TWO — the ones closest to deal-side private equity, M&A, origination, investment analysis or data work. If nothing is close, write zero deep records and say so."
   ],
   "firm": {
     "name": "string - the firm's name, supplied with the input; never null",
@@ -70,9 +72,64 @@
     "future_intakes": "string or null - any stated future cycle, e.g. 'applications for summer 2027 open in September'",
     "evidence": [
       "up to 3 short quotes supporting page_type, TRANSLATED TO ENGLISH"
-    ]
+    ],
+    "how_to_apply": {
+      "_": "everything needed to actually send an application, human or automated",
+      "preferred_route": "posted_role | open_application_form | cv_by_email | programme_application | recruiter_agency | referral_only",
+      "what_to_send": [
+        "IN ENGLISH, as the firm asks - e.g. 'CV', 'university transcripts', 'short note on what you built', 'earliest start date'"
+      ],
+      "what_not_to_send": [
+        "IN ENGLISH - e.g. 'no agency submissions', 'do not attach documents', 'no photos'"
+      ],
+      "format_constraints": "string or null, IN ENGLISH - PDF only, max size, file naming, language of application",
+      "submission_instructions_original": "string or null - the firm's own sentence, unchanged, for quoting back",
+      "emails": [
+        {
+          "address": "copied exactly",
+          "purpose": "string, IN ENGLISH - what this address is for",
+          "is_hiring_address": "true | false"
+        }
+      ],
+      "forms": [
+        {
+          "action_url": "copied exactly from apply_targets, never rewritten",
+          "method": "GET | POST",
+          "accepts_cv_upload": "true | false",
+          "has_captcha": "true | false - if true this is a human route, not an automated one",
+          "fields": [
+            {
+              "name": "copied exactly",
+              "type": "string",
+              "label": "IN ENGLISH",
+              "required": "true | false",
+              "autofill": "first_name | last_name | full_name | email | phone | linkedin | cover_letter | cv_file | consent_checkbox | null"
+            }
+          ]
+        }
+      ],
+      "apply_urls": [
+        "copied exactly - every distinct URL that leads to an application"
+      ],
+      "automatable": "true | false - false if a CAPTCHA, a login, or an agency sits in the way",
+      "blocker_to_automation": "string or null, IN ENGLISH"
+    }
   },
-  "jobs": [
+  "jobs_index": [
+    {
+      "_": "EVERY posting found, shallow. Cheap to produce, complete coverage.",
+      "title": "IN ENGLISH",
+      "title_original": "as printed",
+      "url": "string or null",
+      "function": "investment | portfolio_operations | investor_relations | finance_accounting | legal_compliance | technology | esg | hr | marketing | other",
+      "seniority": "intern | working_student | analyst | associate | vp | principal | partner | support | unknown",
+      "locations": [
+        "city, country"
+      ],
+      "relevance_to_ram": "high | medium | low"
+    }
+  ],
+  "jobs_detail": [
     {
       "title": "string, IN ENGLISH - the job title translated",
       "title_original": "string - the exact title as printed, needed to find the posting on the site",
@@ -138,7 +195,8 @@
         "timing_fit_nov_jan": "true | false | unknown",
         "best_action": "apply_now | write_to_named_contact | send_open_application | watch_for_next_cycle | skip"
       },
-      "contract_type_original": "string or null - source-language contract wording, e.g. 'Praktikum/Werkstudium, Vollzeit'"
+      "contract_type_original": "string or null - source-language contract wording, e.g. 'Praktikum/Werkstudium, Vollzeit'",
+      "_": "AT MOST TWO postings, the ones closest to deal-side PE, M&A, origination, investment analysis or data work. Everything else stays in jobs_index only."
     }
   ]
 }
