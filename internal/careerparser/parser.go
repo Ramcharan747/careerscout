@@ -354,11 +354,43 @@ func Extract(html string, pageURL string) []Job {
 	return dedupe(fromHeadings(doc))
 }
 
+// linkLabelRe matches the wording that sits on a button rather than in a job
+// title, in the languages the archive contains. Only applied to titles that
+// repeat on the same page, where the repetition is the giveaway.
+var linkLabelRe = regexp.MustCompile(`(?i)^(view|see|read|more|details?|apply|open|` +
+	`learn|discover|find out|go to|show|zur|zum|mehr|details|bewerben|jetzt|` +
+	`postuler|voir|en savoir|lire|bekijk|meer|lees|l[aä]s|ans[oö]k|ver|leer|` +
+	`vedi|scopri|to the|this position|the position|position|job|vacancy|stelle)\b|` +
+	`\b(details?|position|stelle|vacancy|job|offre|more)$`)
+
 func dedupe(jobs []Job) []Job {
+	// A title that appears more than once on a page with different links is not
+	// a title. It is the label on a button — "View details", "zur Stelle", "to
+	// the position" — repeated once per row, and the real title sits elsewhere
+	// in the row. Keying only on title+URL let every one of those through as a
+	// separate job.
+	// Two postings genuinely called "Analyst" in different cities are two
+	// postings, so repetition alone is not enough — the wording has to be the
+	// kind that belongs on a button rather than in a job title.
+	count := map[string]int{}
+	for _, j := range jobs {
+		count[strings.ToLower(j.Title)]++
+	}
+
 	seen := map[string]bool{}
 	out := jobs[:0]
 	for _, j := range jobs {
-		k := strings.ToLower(j.Title) + "|" + j.URL
+		t := strings.ToLower(j.Title)
+		if count[t] > 1 && linkLabelRe.MatchString(t) {
+			continue
+		}
+		// One posting reached by two links is one posting, so the link is the
+		// identity where there is one. Titles only identify a row when the
+		// extractor could not find a link at all.
+		k := j.URL
+		if k == "" {
+			k = t
+		}
 		if seen[k] {
 			continue
 		}
