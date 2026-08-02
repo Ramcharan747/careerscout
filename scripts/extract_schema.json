@@ -1,0 +1,144 @@
+{
+  "_note": "Extraction contract for the career-page LLM pass. Two levels: one firm object, and one job object for EVERY posting found — not only internships. Sites word these sections differently ('Dein Alltag' / 'What you'll do' / 'Votre mission'; 'Dein Profil' / 'Who you are' / 'Requirements'; 'Deine Perspektive' / 'What we offer' / 'Why join us'), so map whatever the page uses onto these fields rather than expecting the headings.",
+  "goal_context": "Ram Charan, 2nd-year IIT Delhi Production & Industrial Engineering, graduating May 2028, CGPA 6.4/10. Deal-origination analyst at a search-fund-backed firm; built the origination data platform and AI harness behind it. Wants a PAID off-cycle internship roughly Nov 2026 to Jan 2027, three months, deal-side PE / M&A / IB. US or Europe preferred, Singapore/HK acceptable, not India. Salary floor USD 2,000/month. Open to remote and to sponsorship. Not a search fund. Firms that hard-screen on GPA are a poor fit. He is ALSO analysing ordinary job postings, not just internship programmes, to understand what each firm wants and what a role would teach him — and to keep Summer 2027 and Winter 2026 open.",
+  "instructions": [
+    "You are reading every career page belonging to ONE firm. Answer only from the text.",
+    "Never invent a fact. If the page does not say it, use null — an empty field is more useful than a guess.",
+    "Extract EVERY job posting visible, at any seniority, in any function. Do not filter to internships.",
+    "WRITE EVERY FIELD IN ENGLISH. The pages are in German, French, Dutch, Swedish, Italian, Spanish, Finnish, Slovak and more; translate all of it. A German responsibility becomes an English sentence. Do not leave any field in the source language.",
+    "The only exceptions are the three fields suffixed _original, which keep the exact source string because it is needed to find the posting again, quote it in an application, or search the site. Everything else is English.",
+    "Always fill firm.name, firm.domain and firm.country, even when the pages themselves do not restate them — they are supplied with the input.",
+    "Every domain given must appear in the output exactly once, keyed by domain."
+  ],
+  "firm": {
+    "name": "string - the firm's name, supplied with the input; never null",
+    "domain": "string, echoed exactly; never null",
+    "country": "string - HQ country in English, supplied with the input; never null",
+    "investor_type": "string - supplied with the input, e.g. PE/Buyout",
+    "page_type": "open_roles | internship_programme | open_roles_and_internships | speculative_only | contact_only | mixed | no_door | dead_or_irrelevant",
+    "site_languages": [
+      "languages the career pages are published in, named in English"
+    ],
+    "what_they_say_they_want": "string, IN ENGLISH - what the firm says about who it hires, translated",
+    "hiring_philosophy": "string or null, in English - graduate-focused, entrepreneurial, lateral hires, grow-from-within",
+    "internship_programme": {
+      "_": "a programme the firm DESCRIBES but has not posted as a job; null if none",
+      "exists": "true | false",
+      "name": "string or null, IN ENGLISH - e.g. 'Summer Analyst Programme'",
+      "name_original": "string or null - as printed",
+      "description": "string or null, IN ENGLISH - what the programme is and who it is for",
+      "team": "investment | portfolio_operations | mixed | other | null",
+      "locations": [
+        "city, country - in English"
+      ],
+      "duration": "string or null, IN ENGLISH - e.g. '3 to 6 months', '10 weeks'",
+      "intakes": [
+        "stated intake windows, IN ENGLISH - 'summer', 'each September', 'rolling'"
+      ],
+      "off_cycle_possible": "true | false | null - is a non-summer intake mentioned or implied",
+      "paid": "true | false | null",
+      "pay_stated": "string or null, IN ENGLISH",
+      "deadline": "string or null, IN ENGLISH",
+      "eligibility": "string or null, IN ENGLISH - year of study, degree, nationality, work permit",
+      "grades_or_transcript_required": "true | false | null",
+      "selection_process": [
+        "stages, IN ENGLISH"
+      ],
+      "how_to_register": "string or null, IN ENGLISH - portal, email, agency, referral",
+      "converts_to_fulltime": "true | false | null"
+    },
+    "firm_description": "string or null, in English - strategy, sectors, deal type, region",
+    "offices": [
+      "city, country - in English"
+    ],
+    "application_routes": [
+      "posted_role | open_application_form | cv_by_email | programme_application | recruiter_agency | referral_only"
+    ],
+    "speculative_wording": "string or null, IN ENGLISH - the invitation to apply without a posting, translated",
+    "speculative_wording_original": "string or null - the same sentence in the source language, for quoting back to them",
+    "ats_platform": "string or null",
+    "apply_url": "string or null",
+    "apply_email": "string or null",
+    "contacts": [
+      {
+        "name": "string",
+        "title": "string or null",
+        "email": "string or null",
+        "phone": "string or null"
+      }
+    ],
+    "future_intakes": "string or null - any stated future cycle, e.g. 'applications for summer 2027 open in September'",
+    "evidence": [
+      "up to 3 short quotes supporting page_type, TRANSLATED TO ENGLISH"
+    ]
+  },
+  "jobs": [
+    {
+      "title": "string, IN ENGLISH - the job title translated",
+      "title_original": "string - the exact title as printed, needed to find the posting on the site",
+      "url": "string or null",
+      "function": "investment | portfolio_operations | investor_relations | finance_accounting | legal_compliance | technology | esg | hr | marketing | other",
+      "seniority": "intern | working_student | analyst | associate | vp | principal | partner | support | unknown",
+      "contract_type": "internship | working_student | thesis | graduate_programme | permanent | fixed_term | contract | unknown",
+      "locations": [
+        "city, country"
+      ],
+      "work_model": "onsite | hybrid | remote | unknown",
+      "responsibilities": [
+        "each bullet, IN ENGLISH - what the person actually does"
+      ],
+      "requirements": {
+        "education_level": "string or null, IN ENGLISH - e.g. 'shortly before Bachelor, or in Master/MBA'",
+        "education_field": [
+          "e.g. economics, engineering, natural sciences"
+        ],
+        "experience_wanted": "string or null, IN ENGLISH",
+        "years_experience": "number or null",
+        "languages": [
+          {
+            "language": "string",
+            "level": "string or null"
+          }
+        ],
+        "technical_skills": [
+          "modelling, Excel, Python, SQL, Bloomberg, CapIQ ..."
+        ],
+        "soft_skills": [
+          "as stated, translated to English"
+        ],
+        "grades_or_transcript_required": "true | false | null",
+        "work_authorisation": "string or null - visa, permit, right-to-work wording"
+      },
+      "what_you_will_learn": [
+        "the development section, IN ENGLISH - deal exposure, mentoring, responsibility, learning curve"
+      ],
+      "what_they_offer": [
+        "benefits, culture, structure, comp perks, IN ENGLISH"
+      ],
+      "compensation": {
+        "paid": "true | false | null",
+        "stated": "string or null"
+      },
+      "timing": {
+        "start_date": "string or null, IN ENGLISH - e.g. 'from October', 'immediately'",
+        "duration": "string or null, IN ENGLISH - e.g. '3 to 6 months'",
+        "deadline": "string or null",
+        "rolling": "true | false | null",
+        "off_cycle_possible": "true | false | null"
+      },
+      "selection_process": [
+        "stages as stated, IN ENGLISH - CV screen, case study, interview rounds, assessment centre, tests"
+      ],
+      "fit": {
+        "relevance": "high | medium | low",
+        "reason": "one concrete sentence citing the posting",
+        "blockers": [
+          "e.g. 'German required', 'transcript required', 'summer intake only', 'EU permit required'"
+        ],
+        "timing_fit_nov_jan": "true | false | unknown",
+        "best_action": "apply_now | write_to_named_contact | send_open_application | watch_for_next_cycle | skip"
+      },
+      "contract_type_original": "string or null - source-language contract wording, e.g. 'Praktikum/Werkstudium, Vollzeit'"
+    }
+  ]
+}

@@ -34,6 +34,9 @@ logs/
 !package.json
 !tsconfig.json
 !go.mod
+# Extraction contracts and fitted models are source, not run output. The blanket
+# *.json above silently swallowed them, so schema changes were never committed.
+!scripts/*.json
 !go.sum
 *.txt
 !requirements.txt
