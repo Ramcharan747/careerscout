@@ -30,6 +30,7 @@
 //	JOBS        current parser output, for stratification (default career_jobs.csv)
 //	LABELS      completed stage-1 sheet (stage 2 only, default page_labels.csv)
 //	DOMAINS     restrict the sample to the domains in this CSV/TXT (optional)
+//	SKIP        an earlier labelled sheet; its pages are not sampled again
 //	OUTPUT      defaults to page_labels.csv (stage 1) / job_labels.csv (stage 2)
 //	PAGES       pages to sample in stage 1 (default 120)
 //	SEED        deterministic sample selection (default 1)
@@ -200,7 +201,47 @@ func archive(storeDir string, only map[string]bool) []string {
 
 // ── stage 1 ──────────────────────────────────────────────────────────────────
 
-func stage1(storeDir, outPath string, nPages int, seed int64, jobsCSV string, only map[string]bool) {
+// readSeen loads the page keys of an earlier sheet so a follow-up round spends
+// every row on something new rather than re-asking questions already answered.
+func readSeen(path string) map[string]bool {
+	out := map[string]bool{}
+	if path == "" {
+		return out
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		log.Printf("skip-list %s: %v (ignored)", path, err)
+		return out
+	}
+	defer f.Close()
+	r := csv.NewReader(f)
+	r.LazyQuotes = true
+	r.FieldsPerRecord = -1
+	recs, err := r.ReadAll()
+	if err != nil || len(recs) < 2 {
+		return out
+	}
+	col := -1
+	for i, h := range recs[0] {
+		if strings.EqualFold(strings.TrimSpace(h), "domain") {
+			col = i
+		}
+	}
+	if col < 0 {
+		return out
+	}
+	for _, rec := range recs[1:] {
+		if col < len(rec) {
+			if d := strings.TrimSpace(rec[col]); d != "" {
+				out[d] = true
+			}
+		}
+	}
+	log.Printf("skip-list: %d pages already labelled in %s", len(out), path)
+	return out
+}
+
+func stage1(storeDir, outPath string, nPages int, seed int64, jobsCSV string, only map[string]bool, seen map[string]bool) {
 	yielding := map[string]bool{}
 	if f, err := os.Open(jobsCSV); err == nil {
 		r := csv.NewReader(f)
@@ -238,6 +279,9 @@ func stage1(storeDir, outPath string, nPages int, seed int64, jobsCSV string, on
 	depths := map[int]bool{}
 	for _, p := range archive(storeDir, only) {
 		key := strings.TrimSuffix(filepath.Base(p), ".html.gz")
+		if seen[key] {
+			continue
+		}
 		_, d := splitKey(key)
 		s := stratum{d, yielding[key]}
 		buckets[s] = append(buckets[s], p)
@@ -436,7 +480,7 @@ func main() {
 	case "1":
 		stage1(storeDir, env("OUTPUT", "page_labels.csv"),
 			envInt("PAGES", 120), int64(envInt("SEED", 1)),
-			env("JOBS", "career_jobs.csv"), only)
+			env("JOBS", "career_jobs.csv"), only, readSeen(env("SKIP", "")))
 	case "2":
 		stage2(storeDir, env("LABELS", "page_labels.csv"),
 			env("OUTPUT", "job_labels.csv"), only)
