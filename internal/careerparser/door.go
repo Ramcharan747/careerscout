@@ -82,7 +82,15 @@ var (
 		`spontaneous application|speculative application|open application|` +
 		`unsolicited application|general application|` +
 		`candidature spontan|open sollicitatie|spontane sollicitatie|` +
+		`spontaan sollicit|solliciteren|` + // nl: the stem is solliciter-, not sollicitatie
 		`spontanans[oö]kan|åpen søknad|` +
+		// fr: "no position currently available, send us your application" is the
+		// single most common European phrasing and none of it was here.
+		`aucun poste|pas de poste|poste[s]? [àa] pourvoir|envoyez[- ]nous|` +
+		`envoyez votre candidature|transmettre votre candidature|` +
+		`n'h[ée]sitez pas [àa] nous|adressez[- ]nous|` +
+		`keine offenen stellen|derzeit keine|senden sie uns ihre|` +
+		`schicken sie uns ihre|wir freuen uns auf ihre bewerbung|` +
 		`send (us )?your (cv|r[ée]sum)|submit your (cv|r[ée]sum)|` +
 		`drop (us )?your (cv|r[ée]sum)|share your (cv|r[ée]sum)|` +
 		`don'?t see (a|the|any) (right )?(role|position|job|opening)|` +

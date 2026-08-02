@@ -155,7 +155,7 @@ def main() -> int:
         buckets = collections.defaultdict(list)
         for f in firms:
             buckets[f.get("regex_door", "")].append(f)
-        rng = random.Random(17)
+        rng = random.Random(int(__import__("os").environ.get("PILOT_SEED",17)))
         plan = {"none": 8, "speculative": 4, "internship_programme": 4,
                 "open_roles_incl_internship": 2, "open_roles": 2}
         chosen = []

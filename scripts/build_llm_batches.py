@@ -98,7 +98,7 @@ def main() -> int:
     ap.add_argument("--out", default="llm_batches.jsonl")
     ap.add_argument("--min-score", type=float, default=0.55,
                     help="model probability a nested page must clear to be included")
-    ap.add_argument("--max-pages", type=int, default=5, help="pages per firm")
+    ap.add_argument("--max-pages", type=int, default=6, help="pages per firm")
     ap.add_argument("--max-chars", type=int, default=9000, help="chars per page")
     ap.add_argument("--max-firm-chars", type=int, default=28000, help="chars per firm")
     ap.add_argument("--limit", type=int, default=0, help="pilot: first N firms only")
@@ -172,11 +172,14 @@ def main() -> int:
                     u = key_url.get(key, "")
                     jobs = url_jobs.get(u, 0)
                     door = bool(DOORISH.search(txt))
-                    if jobs < 3 and not door:
-                        dropped_lowscore += 1
-                        continue
-                    # Pages that carry postings rank above pages that only
-                    # carry an invitation; the link score separates ties.
+                    # Every nested page that is not dead goes in. An earlier
+                    # version required 3+ postings or a door keyword, and that
+                    # keyword list had the same language gaps the pilot exposed
+                    # — it dropped a French page reading "Aucun poste à
+                    # pourvoir, envoyez votre candidature". The page is already
+                    # fetched; the only cost of including it is tokens, and
+                    # packing amortises those. Ranking still decides what
+                    # survives the per-firm cap.
                     chosen.append((depth, jobs * 10 + (5 if door else 0)
                                    + url_score.get(u, 0.0), key, txt))
                 else:

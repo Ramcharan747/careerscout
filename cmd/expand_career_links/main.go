@@ -77,10 +77,16 @@ var linkTextRe = regexp.MustCompile(`(?i)\b(open (roles|positions|jobs|vacanc)|`
 	`ofertas de empleo|ver ofertas|posizioni aperte)\b`)
 
 // URL shapes that are listing pages in their own right.
-var linkHrefRe = regexp.MustCompile(`(?i)/(jobs?|careers?|vacanc(y|ies)|positions?|openings?|` +
-	`opportunities|stellen|stellenangebote|vacatures|offres|emploi|lediga-?jobb|` +
-	`stillinger|empleo|ofertas|posizioni|join-us|work-with-us|current-openings|` +
-	`job-search|search-jobs|job-openings|open-roles)(/|$|\?)`)
+//
+// The token is matched anywhere inside a path segment, not only as a whole
+// segment. Anchoring it to segment boundaries missed /formation-emploi/,
+// /vacature-financial-controller and /en/carrieres/ — real listing pages that
+// simply do not put the keyword first.
+var linkHrefRe = regexp.MustCompile(`(?i)/[^/]*(jobs?|careers?|carri[eè]res?|carriere|` +
+	`vacanc(y|ies)|vacature|vacatures|positions?|openings?|opportunit|` +
+	`stellen|stellenangebot|offres?|emploi|lediga-?jobb|jobb|` +
+	`stillinger|empleo|oferta|posizion|lavora|praca|kariera|karriere|` +
+	`join-us|work-with-us|werken-bij|rejoignez|recrutement|reclutamiento)`)
 
 // Pages that look like listings but never are.
 var rejectRe = regexp.MustCompile(`(?i)/(privacy|cookie|terms|legal|imprint|impressum|` +

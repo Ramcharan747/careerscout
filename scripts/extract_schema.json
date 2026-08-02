@@ -10,7 +10,10 @@
     "Always fill firm.name, firm.domain and firm.country, even when the pages themselves do not restate them — they are supplied with the input.",
     "Every domain given must appear in the output exactly once, keyed by domain.",
     "You are ALSO given, per firm, a machine-extracted `apply_targets` block: exact form action URLs, exact field names, mail addresses, and the raw sentence around each address. Those strings are character-exact and must be copied through UNCHANGED into your output — never rewrite, shorten or tidy a field name or a URL. Your job on that block is to interpret it: say in English what the firm asks you to send, and flag anything it forbids.",
-    "Do NOT write a full detailed record for every posting. Index them all shallowly, then write the deep record for AT MOST TWO — the ones closest to deal-side private equity, M&A, origination, investment analysis or data work. If nothing is close, write zero deep records and say so."
+    "Do NOT write a full detailed record for every posting. Index them all shallowly, then write the deep record for AT MOST TWO — the ones closest to deal-side private equity, M&A, origination, investment analysis or data work. If nothing is close, write zero deep records and say so.",
+    "EVIDENCE RULE, applied before you choose page_type. Every non-empty page_type must be backed by a quote you can copy VERBATIM from the supplied page text. For open_roles the quote must name an actual posting. For speculative_only it must be an explicit invitation to apply — 'send us your CV', 'Initiativbewerbung', 'envoyez votre candidature', 'spontaan solliciteren'. A statement about culture, ambition or the kind of people the firm admires is NOT a door: 'we seek out entrepreneurial spirits' and 'our team consists of a variety of personalities' are no_door. If you cannot produce such a quote, page_type is no_door.",
+    "A word appearing only in the navigation bar is not a door either. 'Careers' or 'Open positions' in a menu, with no posting or invitation in the body, is no_door.",
+    "Put those verbatim quotes in firm.evidence_verbatim, in the SOURCE language, copied exactly. They are checked automatically against the page text; an invented quote is worse than an empty field."
   ],
   "firm": {
     "name": "string - the firm's name, supplied with the input; never null",
@@ -113,7 +116,10 @@
       ],
       "automatable": "true | false - false if a CAPTCHA, a login, or an agency sits in the way",
       "blocker_to_automation": "string or null, IN ENGLISH"
-    }
+    },
+    "evidence_verbatim": [
+      "VERBATIM quotes in the SOURCE language, copied exactly from the page text. Checked automatically."
+    ]
   },
   "jobs_index": [
     {
