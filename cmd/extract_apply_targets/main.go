@@ -348,7 +348,15 @@ func main() {
 			if i := strings.IndexAny(addr, "?"); i >= 0 {
 				addr = addr[:i]
 			}
-			if addr == "" {
+			// Sites percent-encode addresses to defeat scrapers, so the href
+			// reads re%63r%75t%65%6de%6e%74@i%73alt.... Passed through raw it
+			// looks like a valid address and is not one; nothing sent to it
+			// would arrive.
+			if dec, err := url.QueryUnescape(addr); err == nil && dec != "" {
+				addr = dec
+			}
+			addr = strings.TrimSpace(addr)
+			if addr == "" || !strings.Contains(addr, "@") {
 				return
 			}
 			local, _, _ := strings.Cut(addr, "@")

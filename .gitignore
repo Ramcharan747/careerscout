@@ -119,3 +119,6 @@ backups/
 data/
 feedback.json
 validation_results.json
+
+# API keys pulled from the router host at runtime.
+.9router_key
