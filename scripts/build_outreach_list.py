@@ -21,7 +21,13 @@ FUND = {"PE/Buyout", "Growth/Expansion", "Family Office",
         "Other Private Equity", "Investment Bank"}
 EU = {"Germany", "France", "Netherlands", "Switzerland", "Belgium", "Sweden",
       "Italy", "Luxembourg", "Norway", "Denmark", "Finland", "Spain", "Austria",
-      "Ireland", "Poland", "Portugal", "United Kingdom", "Czech Republic"}
+      "Ireland", "Poland", "Portugal", "United Kingdom", "Czech Republic",
+      # An earlier version stopped at the eighteen obvious ones and silently
+      # dropped nine actionable firms, including a Slovak fund whose careers
+      # page says in plain English "send us your CV, we will contact you".
+      "Slovakia", "Hungary", "Romania", "Greece", "Cyprus", "Malta", "Slovenia",
+      "Croatia", "Bulgaria", "Estonia", "Latvia", "Lithuania", "Iceland",
+      "Liechtenstein", "Monaco", "Serbia"}
 US = {"United States", "Canada"}
 
 # Firms large enough to run a structured programme with a screen Ram would not
